@@ -1,0 +1,20 @@
+{
+  "name": "minnie-test",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha server.js client.js --timeout 10000",
+    "test:server": "mocha server.js --timeout 10000",
+    "test:client": "mocha client.js --timeout 10000"
+  },
+  "type": "module",
+  "author": "",
+  "license": "ISC",
+  "description": "Mocha tests for Minnie email service",
+  "dependencies": {
+    "chai": "^5.1.1",
+    "mocha": "^10.7.3",
+    "sessionless-node": "^0.11.0",
+    "superagent": "^10.0.0"
+  }
+}

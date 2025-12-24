@@ -54,11 +54,15 @@ const minnie = {
     if(isOrganization) {
       ttlToUse = -1;
     }
-    const keys = (await getKeys()) || (await sessionless.generateKeys(saveKeys, getKeys))
+    let keys = await getKeys();
+    if(!keys || !keys.privateKey) {
+      await sessionless.generateKeys(saveKeys, getKeys);
+      keys = await getKeys();
+    }
     sessionless.getKeys = getKeys;
 
     const payload = {
-      timestamp: new Dateg().getTime() + '',
+      timestamp: new Date().getTime() + '',
       pubKey: keys.pubKey,
       ttl: ttlToUse,
       isOrganization
@@ -79,9 +83,9 @@ console.log(user);
 
     const signature = await sessionless.sign(timestamp + uuid);
 
-    const res = await get(`${minnie.baseURL}user/${uuid}/inbox`, payload);
-    const inbox = res.json();
-        
+    const res = await get(`${minnie.baseURL}user/${uuid}/inbox?timestamp=${timestamp}&signature=${signature}`);
+    const inbox = await res.json();
+
     return inbox;
   },
 
@@ -92,18 +96,19 @@ console.log(user);
 
     const payload = {
       timestamp,
+      userUUID: uuid,
       recipient,
       cc,
-      bcc, 
+      bcc,
       body,
       signature
     };
 
     let postURL = `${minnie.baseURL}user/${uuid}/send`;
 
-    const res = await post(postURL);
+    const res = await post(postURL, payload);
     const success = await res.json();
-   
+
     return success;
   },
 
@@ -112,9 +117,13 @@ console.log(user);
 
     const signature = await sessionless.sign(timestamp + uuid);
 
-    let getURL = `${bdo.baseURL}user/${uuid}/delete?timestamp=${timestamp}&signature=${signature}`;
+    const payload = {
+      timestamp,
+      userUUID: uuid,
+      signature
+    };
 
-    const res = await del(getURL);
+    const res = await _delete(`${minnie.baseURL}user/delete`, payload);
     return res.status;
   }
 };

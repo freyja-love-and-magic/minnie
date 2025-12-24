@@ -1,11 +1,10 @@
-const express = require('express');
-const cors = require('cors');
-const fetch = require('node-fetch');
-const fount = require('fount-js');
-const gateway = require('magic-gateway-js');
-const sessionless = require('sessionless-node');
-const MAGIC = require('./src/magic/magic.js');
-const db = require('./src/persistence/db.js');
+import express from 'express';
+import cors from 'cors';
+import fetch from 'node-fetch';
+import fount from 'fount-js';
+import gateway from 'magic-gateway-js';
+import sessionless from 'sessionless-node';
+import db from './src/persistence/db.js';
 
 const sk = (keys) => {
   global.keys = keys;
@@ -58,10 +57,12 @@ const app = express();
 app.use(cors());
 app.use(express.json({limit: '10mb'}));
 
+const allowedTimeDifference = 300000; // 5 minutes
+
 app.use((req, res, next) => {
   const requestTime = +req.query.timestamp || +req.body.timestamp;
   const now = new Date().getTime();
-  if(Math.abs(now - requestTime) > config.allowedTimeDifference) {
+  if(Math.abs(now - requestTime) > allowedTimeDifference) {
     return res.send({error: 'no time like the present'});
   }
   next();
@@ -69,7 +70,7 @@ app.use((req, res, next) => {
 
 app.put('/user/create', async (req, res) => {
   try {
-    const body - req.body;
+    const body = req.body;
     const timestamp = body.timestamp;
     const pubKey = body.pubKey;
     const ttl = body.ttl;
@@ -79,13 +80,14 @@ app.put('/user/create', async (req, res) => {
     const message = timestamp + pubKey;
 
     if(!sessionless.verifySignature(signature, message, pubKey)) {
-      res.status = 403;
+      res.status(403);
       return res.send({error: 'Auth error'});
     }
-   
-    const emailName = `FOUR${Math.floor(Math.random() * 1000000}`;
+
+    const emailName = `FOUR${Math.floor(Math.random() * 1000000)}`;
 
     const user = {
+      pubKey,
       emailName,
       ttl,
       isOrganization
@@ -93,7 +95,7 @@ app.put('/user/create', async (req, res) => {
 
     const savedUser = await db.putUser(user);
 
-    return res.send({uuid, emailName});
+    return res.send({userUUID: savedUser.userUUID, emailName});
   } catch(err) {
 console.warn(err);
     res.status(404);
@@ -106,13 +108,18 @@ app.get('/user/:uuid/inbox', async (req, res) => {
     const uuid = req.params.uuid;
     const timestamp = req.query.timestamp;
     const signature = req.query.signature;
-    
+
     const message = timestamp + uuid;
 
     const foundUser = await db.getUser(uuid);
-    
-    if(!sessionless.verifySignature(signature, message, pubKey)) {
-      res.status = 403;
+
+    if(!foundUser) {
+      res.status(404);
+      return res.send({error: 'User not found'});
+    }
+
+    if(!sessionless.verifySignature(signature, message, foundUser.pubKey)) {
+      res.status(403);
       return res.send({error: 'Auth error'});
     }
 
@@ -126,7 +133,7 @@ console.warn(err);
   }
 });
 
-app.post('/user/:uuid/send', async (req, res) {
+app.post('/user/:uuid/send', async (req, res) => {
   try {
     const uuid = req.params.uuid;
     const body = req.body;
@@ -134,17 +141,29 @@ app.post('/user/:uuid/send', async (req, res) {
     const recipient = body.recipient;
     const cc = body.cc || [];
     const bcc = body.bcc || [];
-    const body = body.body;
+    const emailBody = body.body;
+    const signature = body.signature;
 
-    const message = timestamp + uuid + recipient + body;
+    const message = timestamp + uuid + recipient + emailBody;
 
     const foundUser = await db.getUser(uuid);
-    
-    if(!sessionless.verifySignature(signature, message, pubKey)) {
-      res.status = 403;
+
+    if(!foundUser) {
+      res.status(404);
+      return res.send({error: 'User not found'});
+    }
+
+    if(!sessionless.verifySignature(signature, message, foundUser.pubKey)) {
+      res.status(403);
       return res.send({error: 'Auth error'});
     }
 
+    // TODO: Actually send email via Resend
+    console.log(`📧 Sending email from ${foundUser.emailName} to ${recipient}`);
+    console.log(`   CC: ${cc.join(', ')}, BCC: ${bcc.join(', ')}`);
+    console.log(`   Body: ${emailBody}`);
+
+    return res.send({success: true});
   } catch(err) {
 console.warn(err);
     res.status(404);
@@ -152,24 +171,30 @@ console.warn(err);
   }
 });
 
-app.delete('/user/:uuid/delete', async (req, res) => {
+app.delete('/user/delete', async (req, res) => {
   try {
-    const uuid = req.params.uuid;
-    const timestamp = req.query.timestamp;
-    const signature = req.query.signature;
+    const body = req.body;
+    const uuid = body.userUUID;
+    const timestamp = body.timestamp;
+    const signature = body.signature;
 
     const message = timestamp + uuid;
 
     const foundUser = await db.getUser(uuid);
 
-    if(!sessionless.verifySignature(signature, message, pubKey)) {
-      res.status = 403;
+    if(!foundUser) {
+      res.status(404);
+      return res.send({error: 'User not found'});
+    }
+
+    if(!sessionless.verifySignature(signature, message, foundUser.pubKey)) {
+      res.status(403);
       return res.send({error: 'Auth error'});
     }
 
-    await db.putUser(uuid);
+    await db.deleteUser(uuid);
 
-    res.status = 202;
+    res.status(202);
     return res.send();
   } catch(err) {
 console.warn(err);
@@ -180,5 +205,6 @@ console.warn(err);
 
 // TODO MAGIC gateway stuff
 
-app.listen(Process.env.PORT || 2525);
-console.log('I don't have mail yet!');
+const PORT = process.env.PORT || 2525;
+app.listen(PORT);
+console.log(`📬 Minnie email service running on port ${PORT}`);
