@@ -12,26 +12,24 @@ const db = {
     return parsedUser; 
   },
 
-  getUserByPublicKey: async (pubKey) => {
-    const uuid = await client.get(`pub_key:${pubKey}`);
-    const user = await db.getUser(uuid);
-    return user;
-  },
-
   putUser: async (user) => {
     const uuid = sessionless.generateUUID();
     user.userUUID = uuid;
+
+    if(user.isOrganization) {
+      user.ttl = -1;
+    }
+
+    user.inbox = [];
+
     await client.set(`user:${uuid}`, JSON.stringify(user));
-    await client.set(`pub_key:${user.pubKey}`, uuid);
     const userToReturn = JSON.parse(JSON.stringify(user));
     return userToReturn;
   },
 
-  updateHash: async (existingUser, oldHash, newHash) => {
-    const user = await db.getUser(existingUser.userUUID);
-    user.hash = newHash;
-    const updatedUser = await db.putUser(user);
-    return updatedUser;
+  getInbox: async (uuid) => {
+    const user = await db.getUser(uuid);
+    return user.inbox;
   },
 
   deleteUser: async (uuid) => {

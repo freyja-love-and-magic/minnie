@@ -31,19 +31,19 @@ const bootstrap = async () => {
 //console.log('Why is this an object???', fountUUID);
 //    const fountUser = await fount.getUserByUUID(fountUUID);
 console.log('fountUser here looks like: ', fountUser);
-    const addie = {
-      uuid: 'addie',
+    const minnie = {
+      uuid: 'minnie',
       baseName,
       fountUUID: fountUser.uuid,
       fountPubKey: fountUser.pubKey,
       ordinal: 0
     };
 
-    if(!addie.fountUUID) {
-      throw new Error('addie bootstrap failed because of no fountUUID');
+    if(!minnie.fountUUID) {
+      throw new Error('minnie bootstrap failed because of no fountUUID');
     }
 
-    await db.putUser('addie', bdo, 'bdo');
+    await db.putUser(minnie);
   } catch(err) {
 console.warn(err);
     repeat(bootstrap);
@@ -91,7 +91,7 @@ app.put('/user/create', async (req, res) => {
       isOrganization
     };
 
-    const savedUser = await db.saveUser(user);
+    const savedUser = await db.putUser(user);
 
     return res.send({uuid, emailName});
   } catch(err) {
