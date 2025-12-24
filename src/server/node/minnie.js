@@ -1,12 +1,184 @@
-const SMTPServer = require("smtp-server").SMTPServer;
-const server = new SMTPServer({
-  disabledCommands: ['STARTTLS', 'AUTH'],
-  logger: true,
-  onData(stream, session, callback){
-        stream.pipe(process.stdout); // print message to console
-        stream.on('end', callback);
+const express = require('express');
+const cors = require('cors');
+const fetch = require('node-fetch');
+const fount = require('fount-js');
+const gateway = require('magic-gateway-js');
+const sessionless = require('sessionless-node');
+const MAGIC = require('./src/magic/magic.js');
+const db = require('./src/persistence/db.js');
+
+const sk = (keys) => {
+  global.keys = keys;
+};
+
+const gk = () => {
+  return keys;
+};
+
+const baseName = process.env.BASE_NAME || 'minnie';
+const SUBDOMAIN = process.env.SUBDOMAIN || 'dev';
+fount.baseURL = process.env.LOCALHOST ? 'http://localhost:3006/' : `https://${SUBDOMAIN}.fount.allyabase.com/`;
+
+console.log('fount\'s baseURL is ', fount.baseURL);
+
+const repeat = (func) => {
+  setTimeout(func, 2000);
+};
+
+const bootstrap = async () => {
+  try {
+    const fountUser = await fount.createUser(db.saveKeys, db.getKeys);
+//console.log('Why is this an object???', fountUUID);
+//    const fountUser = await fount.getUserByUUID(fountUUID);
+console.log('fountUser here looks like: ', fountUser);
+    const addie = {
+      uuid: 'addie',
+      baseName,
+      fountUUID: fountUser.uuid,
+      fountPubKey: fountUser.pubKey,
+      ordinal: 0
+    };
+
+    if(!addie.fountUUID) {
+      throw new Error('addie bootstrap failed because of no fountUUID');
     }
+
+    await db.putUser('addie', bdo, 'bdo');
+  } catch(err) {
+console.warn(err);
+    repeat(bootstrap);
+  }
+};
+
+repeat(bootstrap);
+
+sessionless.generateKeys(sk, gk);
+
+const app = express();
+app.use(cors());
+app.use(express.json({limit: '10mb'}));
+
+app.use((req, res, next) => {
+  const requestTime = +req.query.timestamp || +req.body.timestamp;
+  const now = new Date().getTime();
+  if(Math.abs(now - requestTime) > config.allowedTimeDifference) {
+    return res.send({error: 'no time like the present'});
+  }
+  next();
 });
 
-server.listen(2525);
-console.log('should be listening on 2525');
+app.put('/user/create', async (req, res) => {
+  try {
+    const body - req.body;
+    const timestamp = body.timestamp;
+    const pubKey = body.pubKey;
+    const ttl = body.ttl;
+    const isOrganization = body.isOrganization;
+    const signature = body.signature;
+
+    const message = timestamp + pubKey;
+
+    if(!sessionless.verifySignature(signature, message, pubKey)) {
+      res.status = 403;
+      return res.send({error: 'Auth error'});
+    }
+   
+    const emailName = `FOUR${Math.floor(Math.random() * 1000000}`;
+
+    const user = {
+      emailName,
+      ttl,
+      isOrganization
+    };
+
+    const savedUser = await db.saveUser(user);
+
+    return res.send({uuid, emailName});
+  } catch(err) {
+console.warn(err);
+    res.status(404);
+    return res.send({error: 'not found'});
+  }
+});
+
+app.get('/user/:uuid/inbox', async (req, res) => {
+  try {
+    const uuid = req.params.uuid;
+    const timestamp = req.query.timestamp;
+    const signature = req.query.signature;
+    
+    const message = timestamp + uuid;
+
+    const foundUser = await db.getUser(uuid);
+    
+    if(!sessionless.verifySignature(signature, message, pubKey)) {
+      res.status = 403;
+      return res.send({error: 'Auth error'});
+    }
+
+    const inbox = await db.getInbox(uuid);
+
+    return res.send({inbox});
+  } catch(err) {
+console.warn(err);
+    res.status(404);
+    return res.send({error: 'not found'});
+  }
+});
+
+app.post('/user/:uuid/send', async (req, res) {
+  try {
+    const uuid = req.params.uuid;
+    const body = req.body;
+    const timestamp = body.timestamp;
+    const recipient = body.recipient;
+    const cc = body.cc || [];
+    const bcc = body.bcc || [];
+    const body = body.body;
+
+    const message = timestamp + uuid + recipient + body;
+
+    const foundUser = await db.getUser(uuid);
+    
+    if(!sessionless.verifySignature(signature, message, pubKey)) {
+      res.status = 403;
+      return res.send({error: 'Auth error'});
+    }
+
+  } catch(err) {
+console.warn(err);
+    res.status(404);
+    return res.send({error: 'not found'});
+  }
+});
+
+app.delete('/user/:uuid/delete', async (req, res) => {
+  try {
+    const uuid = req.params.uuid;
+    const timestamp = req.query.timestamp;
+    const signature = req.query.signature;
+
+    const message = timestamp + uuid;
+
+    const foundUser = await db.getUser(uuid);
+
+    if(!sessionless.verifySignature(signature, message, pubKey)) {
+      res.status = 403;
+      return res.send({error: 'Auth error'});
+    }
+
+    await db.putUser(uuid);
+
+    res.status = 202;
+    return res.send();
+  } catch(err) {
+console.warn(err);
+    res.status(404);
+    return res.send({error: 'not found'});
+  }
+});
+
+// TODO MAGIC gateway stuff
+
+app.listen(Process.env.PORT || 2525);
+console.log('I don't have mail yet!');

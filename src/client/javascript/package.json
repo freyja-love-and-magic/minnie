@@ -1,0 +1,27 @@
+{
+  "name": "minnie-js",
+  "version": "0.0.1",
+  "description": "SDK for interfacing with the minnie allyabase service",
+  "keywords": [
+    "minnie",
+    "allyabase",
+    "planet-nine",
+    "sessionless",
+    "email"
+  ],
+  "homepage": "https://github.com/planet-nine-app/minnie#readme",
+  "bugs": {
+    "url": "https://github.com/planet-nine-app/minnie/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/planet-nine-app/minnie.git"
+  },
+  "license": "MIT",
+  "author": "planetnineisaspaceship",
+  "type": "module",
+  "main": "minnie.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
