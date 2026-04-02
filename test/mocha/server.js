@@ -73,6 +73,7 @@ describe('Minnie Email Service - Server Tests', () => {
   });
 
   it('should return existing user UUID when registering with same pubKey', async () => {
+    sessionless.getKeys = () => { return keys; };  // Switch to first user's keys
     const payload = {
       timestamp: new Date().getTime() + '',
       pubKey: keys.pubKey,
@@ -86,6 +87,7 @@ describe('Minnie Email Service - Server Tests', () => {
   });
 
   it('should get user inbox (initially empty)', async () => {
+    sessionless.getKeys = () => { return keys; };  // Switch to first user's keys
     const timestamp = new Date().getTime() + '';
     const uuid = savedUser.userUUID;
 
@@ -94,11 +96,11 @@ describe('Minnie Email Service - Server Tests', () => {
     const res = await get(`${baseURL}user/${uuid}/inbox?timestamp=${timestamp}&signature=${signature}`);
     console.log(res.body);
     res.body.should.have.property('inbox');
-    res.body.inbox.should.be.an('object');
+    res.body.inbox.should.be.an('array');
   });
 
   it('should send an email on behalf of user', async () => {
-    keysToReturn = orgKeys;
+    sessionless.getKeys = () => { return orgKeys; };  // Switch to org user's keys
     const timestamp = new Date().getTime() + '';
     const uuid = savedOrgUser.userUUID;
     const recipient = 'test@example.com';
@@ -120,6 +122,7 @@ describe('Minnie Email Service - Server Tests', () => {
   });
 
   it('should send an email with CC and BCC', async () => {
+    sessionless.getKeys = () => { return orgKeys; };  // Switch to org user's keys
     const timestamp = new Date().getTime() + '';
     const uuid = savedOrgUser.userUUID;
     const recipient = 'test@example.com';
@@ -192,7 +195,7 @@ describe('Minnie Email Service - Server Tests', () => {
   });
 
   it('should delete a user', async () => {
-    keysToReturn = keys;
+    sessionless.getKeys = () => { return keys; };  // Switch to first user's keys
     const timestamp = new Date().getTime() + '';
     const uuid = savedUser.userUUID;
 
@@ -205,7 +208,7 @@ describe('Minnie Email Service - Server Tests', () => {
   });
 
   it('should delete organization user', async () => {
-    keysToReturn = orgKeys;
+    sessionless.getKeys = () => { return orgKeys; };  // Switch to org user's keys
     const timestamp = new Date().getTime() + '';
     const uuid = savedOrgUser.userUUID;
 
@@ -218,6 +221,7 @@ describe('Minnie Email Service - Server Tests', () => {
   });
 
   it('should return 404 for deleted user inbox access', async () => {
+    sessionless.getKeys = () => { return keys; };  // Switch to first user's keys
     const timestamp = new Date().getTime() + '';
     const uuid = savedUser.userUUID;
     const signature = await sessionless.sign(timestamp + uuid);

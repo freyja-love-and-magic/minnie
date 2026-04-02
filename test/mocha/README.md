@@ -180,11 +180,118 @@ To see detailed request/response logs, check the console output when running tes
 - Request body (for PUT/POST)
 - Response body
 
+## Key Learnings & Implementation Notes
+
+### Test Results (January 4, 2026)
+```
+✔ 12/12 Server Tests (100%)
+✔ 7/7 Client SDK Tests (100%)
+──────────────────────────────
+✔ 19/19 Total Tests (100%)
+```
+
+### Critical Discovery: Duplicate Registration as Key Switching Mechanism
+
+**Problem**: The `sessionless-node` library caches the `getKeys` function globally when `generateKeys()` is called. Tests need to switch between different users' keys for multi-user scenarios.
+
+**Failed Approaches**:
+1. Setting `sessionless.getKeys = () => { return keys; }` directly ❌ (ignored by library)
+2. Calling `generateKeys()` with empty save function ❌ (creates new keys, not existing ones)
+
+**Successful Solution**: Re-call `createUser()` before operations that need different keys:
+
+```javascript
+// Switch to first user's keys by "re-registering" (returns existing user)
+await minnie.createUser(30, false, (k) => { keys = k; }, () => { return keys; });
+const inbox = await minnie.getInbox(savedUser.uuid);
+
+// Switch to org user's keys
+await minnie.createUser(null, true, (k) => { orgKeys = k; }, () => { return orgKeys; });
+const result = await minnie.send(savedOrgUser.uuid, 'test@example.com', [], [], 'Email');
+```
+
+**Why This Works**:
+1. Calling `createUser()` with existing pubKey returns existing user UUID (duplicate handling feature)
+2. It calls `sessionless.generateKeys()` internally, which updates the global `getKeys` function
+3. Subsequent SDK calls (`getInbox`, `send`, `deleteUser`) use the newly set keys
+4. No new users created - just leveraging duplicate registration to reset sessionless state
+
+**Code Reference**: See `db.js:15-19` for `getUserByPubKey()` and `db.js:33-35` for Redis index
+
+### Server Bugs Fixed
+
+1. **Missing MAGIC import**: Removed non-existent `./src/magic/magic.js` import
+2. **ES modules config**: Changed `package.json` to `"type": "module"`
+3. **Dependency versions**: Updated `fount-js` to `"latest"`
+4. **Return value bug**: Fixed `savedUser.uuid` → `savedUser.userUUID` in `/user/create` at `minnie.js:115`
+5. **Client SDK keys**: Fixed empty object `{}` truthy check to explicit `!keys || !keys.privateKey` in `minnie.js:58`
+6. **Duplicate registration**: Implemented `getUserByPubKey()` with Redis `pubkey:{pubKey}` → `uuid` index
+7. **Error status codes**: Proper 403/404/500 distinction with try-catch around signature verification
+
+### Error Status Code Pattern
+
+All endpoints now use consistent error handling:
+
+```javascript
+// Signature verification wrapped in try-catch
+let isValidSignature = false;
+try {
+  isValidSignature = sessionless.verifySignature(signature, message, foundUser.pubKey);
+} catch(verifyErr) {
+  console.warn('Signature verification error:', verifyErr);
+  res.status(403);  // Authentication error
+  return res.send({error: 'Auth error'});
+}
+
+if(!isValidSignature) {
+  res.status(403);  // Authorization error
+  return res.send({error: 'Auth error'});
+}
+
+// ... business logic ...
+
+// Catch blocks use 500 for server errors
+catch(err) {
+  console.warn(err);
+  res.status(500);  // Internal server error
+  return res.send({error: 'Server error'});
+}
+```
+
+**Status Code Usage**:
+- **403**: Authentication/signature failures
+- **404**: Resource not found (deleted user, etc.)
+- **500**: Server-side errors (database, etc.)
+
+### Database Schema
+
+**User Storage** - Key: `user:{uuid}`
+```json
+{
+  "userUUID": "abc-123...",
+  "pubKey": "02a1b2c3...",
+  "emailName": "FOUR123456",
+  "ttl": 30,
+  "isOrganization": false,
+  "inbox": []
+}
+```
+
+**PubKey Index** - Key: `pubkey:{pubKey}`, Value: `uuid`
+- Enables O(1) duplicate detection
+- Created in `db.putUser()` at line 34
+- Queried in `db.getUserByPubKey()` at line 16
+
+### TTL Behavior
+
+- **Regular users**: Default 30 days, user-configurable
+- **Organizations**: Always `-1` (indefinite), overrides any provided TTL (enforced at `db.js:26`)
+
 ## Future Test Coverage
 
 Potential additions:
 - MAGIC spell tests
-- Email delivery verification
+- Email delivery verification (Resend integration)
 - TTL expiration tests
 - Spam filtering tests
 - 2FA code extraction tests

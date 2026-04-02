@@ -9,7 +9,13 @@ const db = {
   getUser: async (uuid) => {
     const user = await client.get(`user:${uuid}`);
     const parsedUser = JSON.parse(user);
-    return parsedUser; 
+    return parsedUser;
+  },
+
+  getUserByPubKey: async (pubKey) => {
+    const uuid = await client.get(`pubkey:${pubKey}`);
+    if (!uuid) return null;
+    return await db.getUser(uuid);
   },
 
   putUser: async (user) => {
@@ -23,6 +29,10 @@ const db = {
     user.inbox = [];
 
     await client.set(`user:${uuid}`, JSON.stringify(user));
+    // Store pubKey -> uuid mapping for lookups
+    if(user.pubKey) {
+      await client.set(`pubkey:${user.pubKey}`, uuid);
+    }
     const userToReturn = JSON.parse(JSON.stringify(user));
     return userToReturn;
   },

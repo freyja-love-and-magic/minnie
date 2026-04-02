@@ -79,11 +79,28 @@ app.put('/user/create', async (req, res) => {
 
     const message = timestamp + pubKey;
 
-    if(!sessionless.verifySignature(signature, message, pubKey)) {
+    // Verify signature first
+    let isValidSignature = false;
+    try {
+      isValidSignature = sessionless.verifySignature(signature, message, pubKey);
+    } catch(verifyErr) {
+      console.warn('Signature verification error:', verifyErr);
       res.status(403);
       return res.send({error: 'Auth error'});
     }
 
+    if(!isValidSignature) {
+      res.status(403);
+      return res.send({error: 'Auth error'});
+    }
+
+    // Check if user already exists with this pubKey
+    const existingUser = await db.getUserByPubKey(pubKey);
+    if(existingUser) {
+      return res.send({userUUID: existingUser.userUUID, emailName: existingUser.emailName});
+    }
+
+    // Create new user
     const emailName = `FOUR${Math.floor(Math.random() * 1000000)}`;
 
     const user = {
@@ -98,8 +115,8 @@ app.put('/user/create', async (req, res) => {
     return res.send({userUUID: savedUser.userUUID, emailName});
   } catch(err) {
 console.warn(err);
-    res.status(404);
-    return res.send({error: 'not found'});
+    res.status(500);
+    return res.send({error: 'Server error'});
   }
 });
 
@@ -118,7 +135,17 @@ app.get('/user/:uuid/inbox', async (req, res) => {
       return res.send({error: 'User not found'});
     }
 
-    if(!sessionless.verifySignature(signature, message, foundUser.pubKey)) {
+    // Verify signature with try-catch
+    let isValidSignature = false;
+    try {
+      isValidSignature = sessionless.verifySignature(signature, message, foundUser.pubKey);
+    } catch(verifyErr) {
+      console.warn('Signature verification error:', verifyErr);
+      res.status(403);
+      return res.send({error: 'Auth error'});
+    }
+
+    if(!isValidSignature) {
       res.status(403);
       return res.send({error: 'Auth error'});
     }
@@ -128,8 +155,8 @@ app.get('/user/:uuid/inbox', async (req, res) => {
     return res.send({inbox});
   } catch(err) {
 console.warn(err);
-    res.status(404);
-    return res.send({error: 'not found'});
+    res.status(500);
+    return res.send({error: 'Server error'});
   }
 });
 
@@ -153,7 +180,17 @@ app.post('/user/:uuid/send', async (req, res) => {
       return res.send({error: 'User not found'});
     }
 
-    if(!sessionless.verifySignature(signature, message, foundUser.pubKey)) {
+    // Verify signature with try-catch
+    let isValidSignature = false;
+    try {
+      isValidSignature = sessionless.verifySignature(signature, message, foundUser.pubKey);
+    } catch(verifyErr) {
+      console.warn('Signature verification error:', verifyErr);
+      res.status(403);
+      return res.send({error: 'Auth error'});
+    }
+
+    if(!isValidSignature) {
       res.status(403);
       return res.send({error: 'Auth error'});
     }
@@ -166,8 +203,8 @@ app.post('/user/:uuid/send', async (req, res) => {
     return res.send({success: true});
   } catch(err) {
 console.warn(err);
-    res.status(404);
-    return res.send({error: 'not found'});
+    res.status(500);
+    return res.send({error: 'Server error'});
   }
 });
 
@@ -187,7 +224,17 @@ app.delete('/user/delete', async (req, res) => {
       return res.send({error: 'User not found'});
     }
 
-    if(!sessionless.verifySignature(signature, message, foundUser.pubKey)) {
+    // Verify signature with try-catch
+    let isValidSignature = false;
+    try {
+      isValidSignature = sessionless.verifySignature(signature, message, foundUser.pubKey);
+    } catch(verifyErr) {
+      console.warn('Signature verification error:', verifyErr);
+      res.status(403);
+      return res.send({error: 'Auth error'});
+    }
+
+    if(!isValidSignature) {
       res.status(403);
       return res.send({error: 'Auth error'});
     }
@@ -198,8 +245,8 @@ app.delete('/user/delete', async (req, res) => {
     return res.send();
   } catch(err) {
 console.warn(err);
-    res.status(404);
-    return res.send({error: 'not found'});
+    res.status(500);
+    return res.send({error: 'Server error'});
   }
 });
 

@@ -1,4 +1,5 @@
 import minnie from '../../src/client/javascript/minnie.js';
+import sessionless from 'sessionless-node';
 import { should } from 'chai';
 should();
 
@@ -33,13 +34,17 @@ describe('Minnie Email Service - Client SDK Tests', () => {
   });
 
   it('should get user inbox (initially empty)', async () => {
+    // Re-call createUser to set sessionless.getKeys for first user
+    await minnie.createUser(30, false, (k) => { keys = k; }, () => { return keys; });
     const inbox = await minnie.getInbox(savedUser.uuid);
     console.log('User inbox:', inbox);
     inbox.should.have.property('inbox');
-    inbox.inbox.should.be.an('object');
+    inbox.inbox.should.be.an('array');
   });
 
   it('should send an email on behalf of organization user', async () => {
+    // Re-call createUser to set sessionless.getKeys for org user
+    await minnie.createUser(null, true, (k) => { orgKeys = k; }, () => { return orgKeys; });
     const result = await minnie.send(
       savedOrgUser.uuid,
       'test@example.com',
@@ -53,6 +58,8 @@ describe('Minnie Email Service - Client SDK Tests', () => {
   });
 
   it('should send an email with CC and BCC', async () => {
+    // Re-call createUser to set sessionless.getKeys for org user
+    await minnie.createUser(null, true, (k) => { orgKeys = k; }, () => { return orgKeys; });
     const result = await minnie.send(
       savedOrgUser.uuid,
       'test@example.com',
@@ -66,12 +73,16 @@ describe('Minnie Email Service - Client SDK Tests', () => {
   });
 
   it('should delete a user', async () => {
+    // Re-call createUser to set sessionless.getKeys for first user
+    await minnie.createUser(30, false, (k) => { keys = k; }, () => { return keys; });
     const status = await minnie.deleteUser(savedUser.uuid);
     console.log('Delete user status:', status);
     status.should.equal(202);
   });
 
   it('should delete organization user', async () => {
+    // Re-call createUser to set sessionless.getKeys for org user
+    await minnie.createUser(null, true, (k) => { orgKeys = k; }, () => { return orgKeys; });
     const status = await minnie.deleteUser(savedOrgUser.uuid);
     console.log('Delete organization user status:', status);
     status.should.equal(202);
