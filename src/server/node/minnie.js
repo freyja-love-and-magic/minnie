@@ -14,6 +14,9 @@ const gk = () => {
   return keys;
 };
 
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const MINNIE_FROM = process.env.MINNIE_FROM || 'noreply@planetnine.app';
+
 const baseName = process.env.BASE_NAME || 'minnie';
 const SUBDOMAIN = process.env.SUBDOMAIN || 'dev';
 fount.baseURL = process.env.LOCALHOST ? 'http://localhost:3006/' : `https://${SUBDOMAIN}.fount.allyabase.com/`;
@@ -169,6 +172,9 @@ app.post('/user/:uuid/send', async (req, res) => {
     const cc = body.cc || [];
     const bcc = body.bcc || [];
     const emailBody = body.body;
+    const subject = body.subject || '(no subject)';
+    const html = body.html;
+    const from = body.from;
     const signature = body.signature;
 
     const message = timestamp + uuid + recipient + emailBody;
@@ -195,12 +201,40 @@ app.post('/user/:uuid/send', async (req, res) => {
       return res.send({error: 'Auth error'});
     }
 
-    // TODO: Actually send email via Resend
-    console.log(`📧 Sending email from ${foundUser.emailName} to ${recipient}`);
-    console.log(`   CC: ${cc.join(', ')}, BCC: ${bcc.join(', ')}`);
-    console.log(`   Body: ${emailBody}`);
+    if (!RESEND_API_KEY) {
+      console.error('RESEND_API_KEY not set');
+      res.status(500);
+      return res.send({error: 'email service not configured'});
+    }
 
-    return res.send({success: true});
+    const payload = {
+      from: from || `${foundUser.emailName}@${MINNIE_FROM.includes('@') ? MINNIE_FROM.split('@')[1] : MINNIE_FROM}`,
+      to: Array.isArray(recipient) ? recipient : [recipient],
+      subject,
+    };
+    if (html) payload.html = html;
+    else payload.text = emailBody;
+    if (cc.length) payload.cc = cc;
+    if (bcc.length) payload.bcc = bcc;
+
+    const resendResp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await resendResp.json();
+
+    if (!resendResp.ok) {
+      console.error('Resend error:', data);
+      res.status(resendResp.status);
+      return res.send({error: data.message || 'send failed'});
+    }
+
+    return res.send({success: true, id: data.id});
   } catch(err) {
 console.warn(err);
     res.status(500);
