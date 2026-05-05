@@ -175,6 +175,7 @@ app.post('/user/:uuid/send', async (req, res) => {
     const subject = body.subject || '(no subject)';
     const html = body.html;
     const from = body.from;
+    const attachments = body.attachments;
     const signature = body.signature;
 
     const message = timestamp + uuid + recipient + emailBody;
@@ -216,6 +217,7 @@ app.post('/user/:uuid/send', async (req, res) => {
     else payload.text = emailBody;
     if (cc.length) payload.cc = cc;
     if (bcc.length) payload.bcc = bcc;
+    if (attachments && attachments.length) payload.attachments = attachments;
 
     const resendResp = await fetch('https://api.resend.com/emails', {
       method: 'POST',
